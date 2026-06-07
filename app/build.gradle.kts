@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
 }
 
@@ -78,6 +79,7 @@ dependencies {
 
     implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.2")
     implementation("io.github.jan-tennert.supabase:gotrue-kt:2.5.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.ktor:ktor-client-android:2.3.11")
 
     testImplementation(libs.junit)

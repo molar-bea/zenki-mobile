@@ -1,15 +1,23 @@
 package models
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import org.json.JSONObject
 
+@Serializable
 data class UserModel(
     val id: String,
+    @SerialName("full_name")
     val fullName: String,
     val email: String,
+    @SerialName("phone_number")
     val phoneNumber: String? = null,
     val role: String,
+    @SerialName("is_deleted")
     val isDeleted: Boolean = false,
+    @SerialName("is_synchronized")
     val isSynchronized: Boolean = false,
+    @SerialName("created_at")
     val createdAt: String
 ) {
     fun toMap() = mapOf(
