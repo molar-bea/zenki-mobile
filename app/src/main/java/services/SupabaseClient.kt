@@ -1,9 +1,9 @@
 package services
 
 import com.symphonix.enrollmate.BuildConfig
-import io.github.jan-tennert.supabase.createSupabaseClient
-import io.github.jan-tennert.supabase.gotrue.Auth
-import io.github.jan-tennert.supabase.postgrest.Postgrest
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.gotrue.Auth
+import io.github.jan.supabase.postgrest.Postgrest
 
 val supabase = createSupabaseClient(
     supabaseUrl = BuildConfig.SUPABASE_URL,

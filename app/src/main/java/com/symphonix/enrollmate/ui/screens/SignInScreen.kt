@@ -20,7 +20,9 @@ import com.symphonix.enrollmate.ui.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import services.ApiService
+import services.supabase
+import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.gotrue.providers.builtin.Email
 
 @Composable
 fun SignInScreen(navController: NavController, viewModel: AppViewModel) {
@@ -77,6 +79,8 @@ fun SignInScreen(navController: NavController, viewModel: AppViewModel) {
                 visualTransformation = PasswordVisualTransformation(),
                 enabled = !isLoading,
                 colors = TextFieldDefaults.colors(
+                    focusedTextColor = Color.Black,
+                    unfocusedTextColor = Color.Black,
                     focusedContainerColor = Color(0xFFE0E2DB),
                     unfocusedContainerColor = Color(0xFFE0E2DB),
                     disabledContainerColor = Color(0xFFF0F1EE),
@@ -109,32 +113,30 @@ fun SignInScreen(navController: NavController, viewModel: AppViewModel) {
                         }
                         isLoading = true
                         viewModel.viewModelScope.launch(Dispatchers.IO) {
-                            try {                                val response = ApiService.signIn(email, password)
-                                val success = response.optInt("success") == 1
+                            try {
+                                // 1. Tell Supabase to sign the user in
+                                supabase.auth.signInWith(Email) {
+                                    this.email = email // refers to your state variable
+                                    this.password = password
+                                }
 
                                 withContext(Dispatchers.Main) {
-                                    if (success) {
-                                        val fullName = response.optString("fullName")
-                                        val userId = response.optString("userId", email) // Fallback to email if id absent
-
-                                        viewModel.updateSettings(
-                                            settings.copy(
-                                                isUserLoggedIn = true,
-                                                currentUserFullName = fullName,
-                                                currentUserId = userId
-                                            )
+                                    // 2. Update local app settings on success
+                                    viewModel.updateSettings(
+                                        settings.copy(
+                                            isUserLoggedIn = true,
+                                            currentUserId = email
                                         )
-                                        navController.navigate(Screen.Dashboard.route) {
-                                            popUpTo(Screen.Landing.route) { inclusive = true }
-                                        }
-                                    } else {
-                                        errorMessage = response.optString("message", "Invalid credentials")
-                                        isLoading = false
+                                    )
+                                    // 3. Navigate to Dashboard
+                                    navController.navigate(Screen.Dashboard.route) {
+                                        popUpTo(Screen.Landing.route) { inclusive = true }
                                     }
                                 }
                             } catch (e: Exception) {
+                                // 4. Catch invalid passwords or network issues
                                 withContext(Dispatchers.Main) {
-                                    errorMessage = "Connection error: ${e.localizedMessage}"
+                                    errorMessage = e.localizedMessage ?: "Invalid credentials"
                                     isLoading = false
                                 }
                             }

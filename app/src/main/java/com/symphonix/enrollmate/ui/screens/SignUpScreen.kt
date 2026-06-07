@@ -20,7 +20,9 @@ import com.symphonix.enrollmate.ui.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import services.ApiService
+import services.supabase
+import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.gotrue.providers.builtin.Email
 
 @Composable
 fun SignUpScreen(navController: NavController, viewModel: AppViewModel) {
@@ -74,6 +76,8 @@ fun SignUpScreen(navController: NavController, viewModel: AppViewModel) {
                 placeholder = { Text("Email", color = Color.Gray) },
                 enabled = !isLoading,
                 colors = TextFieldDefaults.colors(
+                    focusedTextColor = Color.Black,
+                    unfocusedTextColor = Color.Black,
                     focusedContainerColor = Color(0xFFE0E2DB),
                     unfocusedContainerColor = Color(0xFFE0E2DB),
                     focusedIndicatorColor = Color.Transparent,
@@ -124,22 +128,21 @@ fun SignUpScreen(navController: NavController, viewModel: AppViewModel) {
                         isLoading = true
                         viewModel.viewModelScope.launch(Dispatchers.IO) {
                             try {
-                                val response = ApiService.signUp(fullName, email, password)
-                                val success = response.optInt("success") == 1
+                                // 1. Tell Supabase to register the new user
+                                supabase.auth.signUpWith(Email) {
+                                    this.email = email
+                                    this.password = password
+                                }
 
                                 withContext(Dispatchers.Main) {
-                                    if (success) {
-                                        navController.navigate(Screen.SignIn.route) {
-                                            popUpTo(Screen.SignUp.route) { inclusive = true }
-                                        }
-                                    } else {
-                                        errorMessage = response.optString("message", "Registration failed.")
-                                        isLoading = false
+                                    // 2. On success, navigate back to Sign In
+                                    navController.navigate(Screen.SignIn.route) {
+                                        popUpTo(Screen.SignUp.route) { inclusive = true }
                                     }
                                 }
                             } catch (e: Exception) {
                                 withContext(Dispatchers.Main) {
-                                    errorMessage = "Connection error: ${e.localizedMessage}"
+                                    errorMessage = "Registration failed: ${e.localizedMessage}"
                                     isLoading = false
                                 }
                             }

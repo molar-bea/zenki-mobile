@@ -12,6 +12,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        compose = true
     }
 
     defaultConfig {
@@ -51,9 +52,7 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
-    buildFeatures {
-        compose = true
-    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -76,7 +75,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation("androidx.navigation:navigation-compose:2.9.8")
 
-    // Supabase Ktor HTTP client, Auth (GoTrue), and Postgrest (Database)
+
     implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.2")
     implementation("io.github.jan-tennert.supabase:gotrue-kt:2.5.2")
     implementation("io.ktor:ktor-client-android:2.3.11")
