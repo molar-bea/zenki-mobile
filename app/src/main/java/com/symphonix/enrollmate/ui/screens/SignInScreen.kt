@@ -1,7 +1,9 @@
 package com.symphonix.enrollmate.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -10,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.symphonix.enrollmate.AppViewModel
@@ -25,104 +28,140 @@ fun SignInScreen(navController: NavController, viewModel: AppViewModel) {
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-
     val settings by viewModel.settings.collectAsState()
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "Sign In",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it; errorMessage = null },
-            label = { Text("Email") },
-            enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-        )
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it; errorMessage = null },
-            label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-        )
-
-        if (errorMessage != null) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Text(
-                text = errorMessage!!,
-                color = Color.Red,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(bottom = 16.dp)
+                text = "Enroll with ease.",
+                fontSize = 18.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(bottom = 24.dp)
             )
-        }
 
-        if (isLoading) {
-            CircularProgressIndicator(modifier = Modifier.padding(bottom = 16.dp))
-        } else {
-            Button(
-                onClick = {
-                    isLoading = true
-                    viewModel.viewModelScope.launch(Dispatchers.IO) {
-                        try {
-                            val response = ApiService.signIn(email, password)
-                            val success = response.optInt("success") == 1
-                            if (success) {
-                                val fullName = response.optString("fullName")
-                                val accessToken = response.optString("accessToken")
-                                // Since we don't have user ID in signin response based on the provided python code, 
-                                // but we might need it for checklist/appointments. 
-                                // The backend code shows it gets full_name and role.
-                                // I'll use email as a fallback if needed or assume user ID is available or handled by some other means.
-                                // Actually, I'll update AppSettings with the info we have.
+            // Soft-filled minimalist input fields matching Figma
+            TextField(
+                value = email,
+                onValueChange = { email = it; errorMessage = null },
+                placeholder = { Text("Email", color = Color.Gray) },
+                enabled = !isLoading,
+                colors = TextFieldDefaults.colors(
+                    focusedTextColor = Color.Black,
+                    unfocusedTextColor = Color.Black,
+                    focusedContainerColor = Color(0xFFE0E2DB),
+                    unfocusedContainerColor = Color(0xFFE0E2DB),
+                    disabledContainerColor = Color(0xFFF0F1EE),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            )
+
+            TextField(
+                value = password,
+                onValueChange = { password = it; errorMessage = null },
+                placeholder = { Text("Password", color = Color.Gray) },
+                visualTransformation = PasswordVisualTransformation(),
+                enabled = !isLoading,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFE0E2DB),
+                    unfocusedContainerColor = Color(0xFFE0E2DB),
+                    disabledContainerColor = Color(0xFFF0F1EE),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
+            )
+
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
+            if (isLoading) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            } else {
+                Button(
+                    onClick = {
+                        if (email.isBlank() || password.isBlank()) {
+                            errorMessage = "Please fill out all fields."
+                            return@Button
+                        }
+                        isLoading = true
+                        viewModel.viewModelScope.launch(Dispatchers.IO) {
+                            try {                                val response = ApiService.signIn(email, password)
+                                val success = response.optInt("success") == 1
+
                                 withContext(Dispatchers.Main) {
-                                    viewModel.updateSettings(
-                                        settings.copy(
-                                            isUserLoggedIn = true,
-                                            currentUserFullName = fullName,
-                                            currentUserId = email // Using email as ID for now if not provided
+                                    if (success) {
+                                        val fullName = response.optString("fullName")
+                                        val userId = response.optString("userId", email) // Fallback to email if id absent
+
+                                        viewModel.updateSettings(
+                                            settings.copy(
+                                                isUserLoggedIn = true,
+                                                currentUserFullName = fullName,
+                                                currentUserId = userId
+                                            )
                                         )
-                                    )
-                                    navController.navigate(Screen.Dashboard.route) {
-                                        popUpTo(Screen.Landing.route) { inclusive = true }
+                                        navController.navigate(Screen.Dashboard.route) {
+                                            popUpTo(Screen.Landing.route) { inclusive = true }
+                                        }
+                                    } else {
+                                        errorMessage = response.optString("message", "Invalid credentials")
+                                        isLoading = false
                                     }
                                 }
-                            } else {
-                                errorMessage = response.optString("message")
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    errorMessage = "Connection error: ${e.localizedMessage}"
+                                    isLoading = false
+                                }
                             }
-                        } catch (e: Exception) {
-                            errorMessage = "Connection error: ${e.message}"
-                        } finally {
-                            isLoading = false
                         }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Text("Sign In")
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .height(45.dp)
+                        .padding(horizontal = 32.dp)
+                ) {
+                    Text("Sign in", color = Color.White, fontWeight = FontWeight.Bold)
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        Row {
-            Text("Don't have an account? ")
-            Text(
-                text = "Sign Up",
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { navController.navigate(Screen.SignUp.route) }
-            )
+            Row {
+                Text("Don't have an account? ", color = Color.Black)
+                Text(
+                    text = "Sign up",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { navController.navigate(Screen.SignUp.route) }
+                )
+            }
         }
     }
 }
