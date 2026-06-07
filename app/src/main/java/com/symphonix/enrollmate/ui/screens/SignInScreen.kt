@@ -23,6 +23,9 @@ import kotlinx.coroutines.withContext
 import services.supabase
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.gotrue.providers.builtin.Email
+import io.github.jan.supabase.postgrest.postgrest
+import models.UserModel
+import services.DatabaseService
 
 @Composable
 fun SignInScreen(navController: NavController, viewModel: AppViewModel) {
@@ -116,25 +119,60 @@ fun SignInScreen(navController: NavController, viewModel: AppViewModel) {
                             try {
                                 // 1. Tell Supabase to sign the user in
                                 supabase.auth.signInWith(Email) {
-                                    this.email = email // refers to your state variable
+                                    this.email = email
                                     this.password = password
                                 }
 
+                                // 2. Get user info from database
+                                val userId = supabase.auth.currentUserOrNull()?.id
+                                var userFullName = "User"
+                                
+                                if (userId != null) {
+                                    try {
+                                        // Try fetching from Supabase
+                                        val userProfile = supabase.postgrest.from("users")
+                                            .select {
+                                                filter {
+                                                    eq("id", userId.toString())
+                                                }
+                                            }.decodeSingleOrNull<UserModel>()
+                                        
+                                        if (userProfile != null) {
+                                            userFullName = userProfile.fullName
+                                            // Sync to local DB
+                                            DatabaseService.upsertUser(userProfile)
+                                        } else {
+                                            // Try local DB if remote fetch fails or returns null
+                                            val localUser = DatabaseService.getModelById("users", userId.toString()) as? UserModel
+                                            if (localUser != null) {
+                                                userFullName = localUser.fullName
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        // Fallback to local DB if network fails
+                                        val localUser = DatabaseService.getModelById("users", userId.toString()) as? UserModel
+                                        if (localUser != null) {
+                                            userFullName = localUser.fullName
+                                        }
+                                    }
+                                }
+
                                 withContext(Dispatchers.Main) {
-                                    // 2. Update local app settings on success
+                                    // 3. Update local app settings on success
                                     viewModel.updateSettings(
                                         settings.copy(
                                             isUserLoggedIn = true,
-                                            currentUserId = email
+                                            currentUserId = userId?.toString() ?: email,
+                                            currentUserFullName = userFullName
                                         )
                                     )
-                                    // 3. Navigate to Dashboard
+                                    // 4. Navigate to Dashboard
                                     navController.navigate(Screen.Dashboard.route) {
                                         popUpTo(Screen.Landing.route) { inclusive = true }
                                     }
                                 }
                             } catch (e: Exception) {
-                                // 4. Catch invalid passwords or network issues
+                                // 5. Catch invalid passwords or network issues
                                 withContext(Dispatchers.Main) {
                                     errorMessage = e.localizedMessage ?: "Invalid credentials"
                                     isLoading = false

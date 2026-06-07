@@ -23,6 +23,11 @@ import kotlinx.coroutines.withContext
 import services.supabase
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.gotrue.providers.builtin.Email
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
+import services.DatabaseService
+import models.UserModel
+import java.time.Instant
 
 @Composable
 fun SignUpScreen(navController: NavController, viewModel: AppViewModel) {
@@ -129,13 +134,35 @@ fun SignUpScreen(navController: NavController, viewModel: AppViewModel) {
                         viewModel.viewModelScope.launch(Dispatchers.IO) {
                             try {
                                 // 1. Tell Supabase to register the new user
-                                supabase.auth.signUpWith(Email) {
+                                val authResult = supabase.auth.signUpWith(Email) {
                                     this.email = email
                                     this.password = password
                                 }
+                                
+                                val userId = supabase.auth.currentUserOrNull()?.id
+                                if (userId != null) {
+                                    val newUser = UserModel(
+                                        id = userId.toString(),
+                                        fullName = fullName,
+                                        email = email,
+                                        role = "student", // default role
+                                        createdAt = Instant.now().toString()
+                                    )
+
+                                    // 2. Save to Supabase DB (Postgrest)
+                                    try {
+                                        supabase.postgrest.from("users").insert(newUser)
+                                    } catch (dbError: Exception) {
+                                        // Even if remote insert fails, we might want to continue or show warning
+                                        println("Remote DB insert failed: ${dbError.message}")
+                                    }
+
+                                    // 3. Save to local DB
+                                    DatabaseService.upsertUser(newUser)
+                                }
 
                                 withContext(Dispatchers.Main) {
-                                    // 2. On success, navigate back to Sign In
+                                    // 4. On success, navigate back to Sign In
                                     navController.navigate(Screen.SignIn.route) {
                                         popUpTo(Screen.SignUp.route) { inclusive = true }
                                     }
