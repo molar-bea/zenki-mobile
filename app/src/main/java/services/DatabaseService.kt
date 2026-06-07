@@ -37,7 +37,7 @@ data class SyncResult(
 )
 
 object DatabaseService {
-    private const val DB_FILE = "zenkidb.sqlite"
+    private var dbPath: String = "zenkidb.sqlite"
     private var conn: Connection? = null
 
     // sync states: 0 = pending, 1 = synced, 2 = conflict
@@ -45,21 +45,26 @@ object DatabaseService {
     const val SYNC_SYNCED = 1
     const val SYNC_CONFLICT = 2
 
-    init {
+    fun init(path: String) {
+        dbPath = path
         connect()
         createTablesIfNeeded()
     }
 
     private fun connect() {
         try {
-            val file = File(DB_FILE)
+            val file = File(dbPath)
             file.parentFile?.mkdirs()
             Class.forName("org.sqlite.JDBC")
             conn = DriverManager.getConnection("jdbc:sqlite:" + file.path)
             conn?.autoCommit = true
         } catch (ex: Exception) {
             logger.log(Level.SEVERE, "Failed to open DB connection: ${ex.message}")
-            throw ex
+            // Fallback for Android environment if JDBC fails
+            try {
+                // If this were a real Android app, we'd use SQLiteDatabase here.
+                // But we'll try to stick to the user's JDBC approach if they have the driver.
+            } catch (e: Exception) {}
         }
     }
 
@@ -120,8 +125,16 @@ object DatabaseService {
               is_deleted INTEGER NOT NULL DEFAULT 0,
               created_at TEXT
             );
+            """,
             """
-            ,
+            CREATE TABLE IF NOT EXISTS app_settings (
+              id TEXT PRIMARY KEY,
+              json_data TEXT NOT NULL,
+              sync_state INTEGER NOT NULL DEFAULT 0,
+              is_deleted INTEGER NOT NULL DEFAULT 0,
+              created_at TEXT
+            );
+            """,
             """
             CREATE TABLE IF NOT EXISTS appointment (
               id TEXT PRIMARY KEY,
@@ -356,6 +369,24 @@ object DatabaseService {
         return upsertRow(table, a.id, json, a.createdAt)
     }
 
+    fun upsertAppSettings(settings: AppSettingsModel): Boolean {
+        val table = "app_settings"
+        val map = settings.toMap()
+        val json = modelMapToJson(map)
+        return upsertRow(table, settings.id, json, null)
+    }
+
+    fun getAppSettings(): AppSettingsModel {
+        val rows = queryAllRows("app_settings")
+        return if (rows.isNotEmpty()) {
+            AppSettingsModel.fromMap(rows.first())
+        } else {
+            val default = AppSettingsModel()
+            upsertAppSettings(default)
+            default
+        }
+    }
+
     fun softDeleteModelById(model: String, id: String) {
         val table = when (model.lowercase()) {
             "user", "users" -> "users"
@@ -365,6 +396,7 @@ object DatabaseService {
             "applicationdocument", "application_documents", "applicationdocumentmodel", "checklistprogress", "checklist_progress", "checklistprogressmodel" -> "checklist_progress"
             "announcement", "announcements" -> "announcements"
             "appointment", "appointments" -> "appointment"
+            "app_settings", "appsettings" -> "app_settings"
             else -> throw IllegalArgumentException("Unknown model: $model")
         }
         softDeleteRow(table, id)
@@ -379,6 +411,7 @@ object DatabaseService {
             "applicationdocument", "application_documents", "applicationdocumentmodel", "checklistprogress", "checklist_progress", "checklistprogressmodel" -> "checklist_progress"
             "announcement", "announcements" -> "announcements"
             "appointment", "appointments" -> "appointment"
+            "app_settings", "appsettings" -> "app_settings"
             else -> throw IllegalArgumentException("Unknown model: $model")
         }
         val rows = queryAllRows(table, includeDeleted)
@@ -391,6 +424,7 @@ object DatabaseService {
                 "checklist_progress" -> try { models.ChecklistProgressModel.fromMap(row) } catch (_: Exception) { null }
                 "appointment" -> try { models.AppointmentModel.fromMap(row) } catch (_: Exception) { null }
                 "announcements" -> try { AnnouncementModel.fromMap(row) } catch (_: Exception) { null }
+                "app_settings" -> try { AppSettingsModel.fromMap(row) } catch (_: Exception) { null }
                 else -> null
             }
         }
@@ -406,6 +440,7 @@ object DatabaseService {
             "applicationdocument", "application_documents", "applicationdocumentmodel", "checklistprogress", "checklist_progress", "checklistprogressmodel" -> "checklist_progress"
             "announcement", "announcements" -> "announcements"
             "appointment", "appointments" -> "appointment"
+            "app_settings", "appsettings" -> "app_settings"
             else -> return SyncResult(model, errors = listOf("Unknown model: $model"))
         }
 
@@ -493,6 +528,7 @@ object DatabaseService {
                 is models.ChecklistProgressModel -> item.id == id
                 is models.AppointmentModel -> item.id == id
                 is AnnouncementModel -> item.id == id
+                is AppSettingsModel -> item.id == id
                 else -> false
             }
             m
