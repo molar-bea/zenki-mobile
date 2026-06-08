@@ -5,24 +5,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewModelScope
 import com.symphonix.enrollmate.AppViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import services.ApiService
+import models.AnnouncementModel
 import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
 fun DashboardScreen(viewModel: AppViewModel) {
     val settings by viewModel.settings.collectAsState()
-    var announcements by remember { mutableStateOf<List<Announcement>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    val announcements by viewModel.announcements.collectAsState()
+    val isLoading by viewModel.isLoadingAnnouncements.collectAsState()
 
     val calendar = Calendar.getInstance()
     val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
@@ -31,32 +27,7 @@ fun DashboardScreen(viewModel: AppViewModel) {
     val currentDay = dayFormat.format(calendar.time)
 
     LaunchedEffect(Unit) {
-        viewModel.viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val response = ApiService.getAnnouncements()
-                if (response.optInt("success") == 1) {
-                    val data = response.optJSONArray("data") ?: JSONArray()
-                    val list = mutableListOf<Announcement>()
-                    for (i in 0 until data.length()) {
-                        val obj = data.getJSONObject(i)
-                        list.add(
-                            Announcement(
-                                title = obj.optString("title"),
-                                body = obj.optString("body"),
-                                createdAt = obj.optString("created_at")
-                            )
-                        )
-                    }
-                    withContext(Dispatchers.Main) {
-                        announcements = list
-                    }
-                }
-            } catch (e: Exception) {
-                // handle error
-            } finally {
-                isLoading = false
-            }
-        }
+        viewModel.refreshAnnouncements()
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -80,10 +51,19 @@ fun DashboardScreen(viewModel: AppViewModel) {
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        if (isLoading) {
-            CircularProgressIndicator()
+        if (isLoading && announcements.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (announcements.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(text = "No announcements at this time.", style = MaterialTheme.typography.bodyLarge)
+            }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
                 items(announcements) { announcement ->
                     AnnouncementCard(announcement)
                 }
@@ -93,7 +73,7 @@ fun DashboardScreen(viewModel: AppViewModel) {
 }
 
 @Composable
-fun AnnouncementCard(announcement: Announcement) {
+fun AnnouncementCard(announcement: AnnouncementModel) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -106,24 +86,26 @@ fun AnnouncementCard(announcement: Announcement) {
                 Text(
                     text = announcement.title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
                 )
                 Text(
-                    text = announcement.createdAt.split("T")[0],
-                    style = MaterialTheme.typography.bodySmall
+                    text = try {
+                        announcement.createdAt.split("T")[0]
+                    } catch (e: Exception) {
+                        announcement.createdAt
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 8.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = announcement.body,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            if (!announcement.body.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = announcement.body,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
 }
-
-data class Announcement(
-    val title: String,
-    val body: String,
-    val createdAt: String
-)
