@@ -151,7 +151,7 @@ fun SignUpScreen(navController: NavController, viewModel: AppViewModel) {
 
                                     // 2. Save to Supabase DB (Postgrest)
                                     try {
-                                        supabase.postgrest.from("users").insert(newUser)
+                                        supabase.postgrest.from("user").insert(newUser)
                                     } catch (dbError: Exception) {
                                         // Even if remote insert fails, we might want to continue or show warning
                                         println("Remote DB insert failed: ${dbError.message}")

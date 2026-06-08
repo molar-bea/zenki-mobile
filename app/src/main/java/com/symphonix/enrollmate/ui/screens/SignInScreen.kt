@@ -130,7 +130,7 @@ fun SignInScreen(navController: NavController, viewModel: AppViewModel) {
                                 if (userId != null) {
                                     try {
                                         // Try fetching from Supabase
-                                        val userProfile = supabase.postgrest.from("users")
+                                        val userProfile = supabase.postgrest.from("user")
                                             .select {
                                                 filter {
                                                     eq("id", userId.toString())
