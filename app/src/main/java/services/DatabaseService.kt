@@ -1,6 +1,11 @@
 package services
 
-import models.*
+import models.UserModel
+import models.ProgramModel
+import models.RequirementModel
+import models.ApplicationModel
+import models.AnnouncementModel
+import models.AppSettingsModel
 import models.toMap
 import org.json.JSONObject
 import java.io.File
@@ -138,15 +143,11 @@ object DatabaseService {
             """
             CREATE TABLE IF NOT EXISTS appointment (
               id TEXT PRIMARY KEY,
-              application_id TEXT,
               json_data TEXT NOT NULL,
               sync_state INTEGER NOT NULL DEFAULT 0,
               is_deleted INTEGER NOT NULL DEFAULT 0,
               created_at TEXT
             );
-            """,
-            """
-            CREATE INDEX IF NOT EXISTS idx_appointment_application_id ON appointment(application_id);
             """,
             """
             CREATE INDEX IF NOT EXISTS idx_appointment_scheduled_date ON appointment((json_extract(json_data, '$.scheduled_date')));
@@ -224,7 +225,7 @@ object DatabaseService {
                     val syncState = rs.getInt("sync_state")
                     val isDeleted = rs.getInt("is_deleted")
                     val createdAt = rs.getString("created_at")
-                    val map = try {
+                    val map: Map<String, Any?> = try {
                         JSONObject(json).toMap()
                     } catch (ex: Exception) {
                         mapOf("_raw" to json)
@@ -276,9 +277,9 @@ object DatabaseService {
                 // try JSON
                 try {
                     val jo = JSONObject(raw)
-                    val map = jo.toMap()
+                    val map: Map<String, Any?> = jo.toMap()
                     // If map contains an array root, expose its elements
-                    val arrayRootKey = map.keys.firstOrNull { k -> map[k] is List<*> }
+                    val arrayRootKey = map.keys.firstOrNull { k: String -> map[k] is List<*> }
                     if (arrayRootKey != null) {
                         val list = map[arrayRootKey] as List<*>
                         for (item in list) {
@@ -298,7 +299,7 @@ object DatabaseService {
             is Map<*, *> -> {
                 val m = raw as Map<String, Any?>
                 // check for common array roots
-                val arrayRootKey = m.keys.firstOrNull { k -> m[k] is List<*> }
+                val arrayRootKey = m.keys.firstOrNull { k: String -> m[k] is List<*> }
                 if (arrayRootKey != null) {
                     val list = m[arrayRootKey] as List<*>
                     for (item in list) {

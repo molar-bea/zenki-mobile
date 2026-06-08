@@ -1,5 +1,6 @@
 package models
 
+import models.toMap
 import org.json.JSONObject
 
 data class ApplicationModel(
@@ -14,7 +15,7 @@ data class ApplicationModel(
     val isSynchronized: Boolean = false,
     val createdAt: String
 ) {
-    fun toMap() = mapOf(
+    fun toMap(): Map<String, Any?> = mapOf(
         "id" to id,
         "applicant_id" to applicantId,
         "program_id" to programId,
@@ -27,10 +28,10 @@ data class ApplicationModel(
         "created_at" to createdAt
     )
 
-    fun toJson() = JSONObject(toMap()).toString()
+    fun toJson(): String = JSONObject(toMap()).toString()
 
     companion object {
-        fun fromMap(map: Map<String, Any?>) = ApplicationModel(
+        fun fromMap(map: Map<String, Any?>): ApplicationModel = ApplicationModel(
             id = map["id"]?.toString().orEmpty(),
             applicantId = map["applicant_id"]?.toString(),
             programId = map["program_id"]?.toString(),
@@ -43,6 +44,6 @@ data class ApplicationModel(
             createdAt = map["created_at"]?.toString().orEmpty()
         )
 
-        fun fromJson(source: String) = fromMap(JSONObject(source).toMap() as Map<String, Any?>)
+        fun fromJson(source: String): ApplicationModel = fromMap(JSONObject(source).toMap() as Map<String, Any?>)
     }
 }

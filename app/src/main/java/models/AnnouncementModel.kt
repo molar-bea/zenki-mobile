@@ -2,6 +2,7 @@ package models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import models.toMap
 import org.json.JSONObject
 
 @Serializable
