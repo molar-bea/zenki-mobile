@@ -24,7 +24,6 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
     val settings by viewModel.settings.collectAsState()
     var showSignOutDialog by remember { mutableStateOf(false) }
 
-    // ── Sign-out confirmation dialog ──────────────────────────────────────────
     if (showSignOutDialog) {
         AlertDialog(
             onDismissRequest = { showSignOutDialog = false },
@@ -79,7 +78,6 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
         )
     }
 
-    // ── Main layout ───────────────────────────────────────────────────────────
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -87,7 +85,6 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
             .padding(24.dp)
     ) {
 
-        // Header row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -117,7 +114,6 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
             }
         }
 
-        // Avatar + name card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -129,7 +125,6 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Avatar circle - first letter of full name
                 Box(
                     modifier = Modifier
                         .size(60.dp)
@@ -138,12 +133,7 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = (settings.currentUserFullName
-                            ?.trim()
-                            ?.firstOrNull()
-                            ?.uppercaseChar()
-                            ?.toString()
-                            ?: "?"),
+                        text = settings.currentUserFullName?.trim()?.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -152,13 +142,13 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
 
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(
-                        text = settings.currentUserFullName ?: "User Name",   // ← full name
+                        text = settings.currentUserFullName ?: "User Name",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1A1A1A)
                     )
                     Text(
-                        text = settings.currentUserEmail ?: "email@example.com",  // ← email, not ID
+                        text = settings.currentUserEmail ?: "email@example.com",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF999999)
                     )
@@ -168,7 +158,6 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // Settings section label
         Column(modifier = Modifier.padding(bottom = 10.dp)) {
             Text(
                 text = "Settings",
@@ -183,7 +172,6 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
             )
         }
 
-        // Settings card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -212,12 +200,8 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
                 )
             }
         }
-
-
     }
 }
-
-// ── Reusable settings row ─────────────────────────────────────────────────────
 
 @Composable
 private fun SettingsToggleRow(
