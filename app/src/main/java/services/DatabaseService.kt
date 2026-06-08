@@ -181,14 +181,14 @@ object DatabaseService {
         }
     }
 
-    private fun upsertRow(table: String, id: String, jsonData: String, createdAt: String?): Boolean {
+    private fun upsertRow(table: String, id: String, jsonData: String, createdAt: String?, isDeleted: Boolean = false): Boolean {
         val sql = "INSERT INTO $table (id, json_data, sync_state, is_deleted, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET json_data = excluded.json_data, sync_state = excluded.sync_state, is_deleted = excluded.is_deleted, created_at = COALESCE(excluded.created_at, $table.created_at)"
         conn?.prepareStatement(sql).use { ps ->
             if (ps == null) return false
             ps.setString(1, id)
             ps.setString(2, jsonData)
             ps.setInt(3, SYNC_PENDING)
-            ps.setInt(4, 0)
+            ps.setInt(4, if (isDeleted) 1 else 0)
             if (createdAt != null) ps.setString(5, createdAt) else ps.setNull(5, java.sql.Types.VARCHAR)
             ps.executeUpdate()
             return true
@@ -262,6 +262,16 @@ object DatabaseService {
         if (raw == null) return results
 
         when (raw) {
+            is org.json.JSONArray -> {
+                for (i in 0 until raw.length()) {
+                    val item = raw.opt(i)
+                    if (item is JSONObject) {
+                        results.add(item.toMap())
+                    } else {
+                        results.add(mapOf("_value" to item, "_external_mapping" to "TODO_MAPPING_REQUIRED"))
+                    }
+                }
+            }
             is String -> {
                 // try JSON
                 try {
@@ -479,12 +489,20 @@ object DatabaseService {
                 // Use TODO_MAPPING_REQUIRED flag when mapping is ambiguous.
                 val targetMap = mutableMapOf<String, Any?>()
                 targetMap.putAll(entry)
-                if (!targetMap.containsKey("is_deleted")) targetMap["is_deleted"] = false
+                
+                val isDeletedExternal = when(val del = entry["is_deleted"]) {
+                    is Boolean -> del
+                    is Int -> del == 1
+                    is String -> del.lowercase() == "true" || del == "1"
+                    else -> false
+                }
+                
+                if (!targetMap.containsKey("is_deleted")) targetMap["is_deleted"] = isDeletedExternal
                 if (!targetMap.containsKey("created_at")) targetMap["created_at"] = existing?.get("created_at")
 
                 val json = modelMapToJson(targetMap)
 
-                val ok = upsertRow(table, id, json, targetMap["created_at"]?.toString())
+                val ok = upsertRow(table, id, json, targetMap["created_at"]?.toString(), isDeletedExternal)
                 if (!ok) {
                     errors.add("Failed upsert id=$id")
                 } else {
