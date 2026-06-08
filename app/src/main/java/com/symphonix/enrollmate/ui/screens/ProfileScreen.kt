@@ -129,7 +129,7 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Avatar circle
+                // Avatar circle - first letter of full name
                 Box(
                     modifier = Modifier
                         .size(60.dp)
@@ -139,8 +139,10 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
                 ) {
                     Text(
                         text = (settings.currentUserFullName
+                            ?.trim()
                             ?.firstOrNull()
-                            ?.uppercase()
+                            ?.uppercaseChar()
+                            ?.toString()
                             ?: "?"),
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
@@ -150,13 +152,13 @@ fun ProfileScreen(navController: NavController, viewModel: AppViewModel) {
 
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(
-                        text = settings.currentUserFullName ?: "User Name",
+                        text = settings.currentUserFullName ?: "User Name",   // ← full name
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1A1A1A)
                     )
                     Text(
-                        text = settings.currentUserId ?: "email@example.com",
+                        text = settings.currentUserEmail ?: "email@example.com",  // ← email, not ID
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF999999)
                     )

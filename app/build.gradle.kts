@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("androidx.compose.material:material-icons-extended")
 
 
     implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.2")
