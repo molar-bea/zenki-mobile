@@ -2,6 +2,7 @@ package com.symphonix.enrollmate.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,7 +31,6 @@ import java.util.Locale
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Converts "2026-06-07" to "Sunday, Jun 7, 2026"
 fun formatToWebDate(dateString: String): String {
     return try {
         val parser = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -82,11 +82,17 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
     var availableSchedules by remember { mutableStateOf<List<AppointmentScheduleEntry>>(emptyList()) }
     var appointments by remember { mutableStateOf<List<AppointmentScheduleRow>>(emptyList()) }
 
+    // NEW: Tracks how many people have booked each schedule ID globally
+    var scheduleCounts by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     var showReceiptDialog by remember { mutableStateOf(false) }
     var currentReceipt by remember { mutableStateOf<ReceiptData?>(null) }
+
+    var appointmentToCancel by remember { mutableStateOf<AppointmentScheduleRow?>(null) }
+    var isCancelling by remember { mutableStateOf(false) }
 
     LaunchedEffect(settings.currentUserId, selectedCategory) {
         isLoading = true
@@ -94,6 +100,7 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
 
         viewModel.viewModelScope.launch(Dispatchers.IO) {
             try {
+                // 1. Fetch available schedules
                 val schedules = supabase.postgrest["appointment_schedule"]
                     .select {
                         filter {
@@ -101,12 +108,30 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                             eq("is_deleted", false)
                         }
                     }.decodeList<AppointmentScheduleEntry>()
-                withContext(Dispatchers.Main) { availableSchedules = schedules }
+
+                // 2. NEW: Fetch ALL active global appointments to calculate capacities
+                val globalBookings = supabase.postgrest["appointment"]
+                    .select {
+                        filter {
+                            eq("appointment_type", selectedCategory)
+                            eq("is_deleted", false)
+                            neq("status", "cancelled") // Do not count cancelled bookings!
+                        }
+                    }.decodeList<AppointmentScheduleRow>()
+
+                // Count how many bookings exist for each schedule ID
+                val counts = globalBookings.groupingBy { it.scheduleId ?: "" }.eachCount()
+
+                withContext(Dispatchers.Main) {
+                    availableSchedules = schedules
+                    scheduleCounts = counts
+                }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { errorMessage = "Admin Table Error: ${e.localizedMessage}" }
             }
 
             try {
+                // 3. Fetch the logged-in user's personal appointments
                 settings.currentUserId?.let { userId ->
                     val fetchedAppointments = supabase.postgrest["appointment"]
                         .select {
@@ -138,21 +163,13 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
 
         viewModel.viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1. Find the schedule entry to get the ID and capacity
                 val scheduleEntry = availableSchedules.find { it.scheduleDate == scheduleDate }
                 val capacity = scheduleEntry?.capacity ?: 50
 
-                // 2. The SINGLE "existingForSlot" query using the new schedule_id
-                val existingForSlot = supabase.postgrest["appointment"]
-                    .select {
-                        filter {
-                            eq("schedule_id", scheduleEntry?.id ?: "") // Matches exact ID
-                            eq("is_deleted", false)
-                        }
-                    }.decodeList<AppointmentScheduleRow>()
+                // Use our global map to get the real-time capacity count
+                val currentBooked = scheduleCounts[scheduleEntry?.id ?: ""] ?: 0
 
-                // 3. Enforce the limit
-                if (existingForSlot.size >= capacity) {
+                if (currentBooked >= capacity) {
                     withContext(Dispatchers.Main) {
                         errorMessage = "Sorry, all $type slots for $scheduleDate are fully booked."
                         isLoading = false
@@ -160,7 +177,7 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                     return@launch
                 }
 
-                val queueNumber = existingForSlot.size + 1
+                val queueNumber = currentBooked + 1
                 val newAppointment = AppointmentScheduleRow(
                     userId = settings.currentUserId,
                     scheduleId = scheduleEntry?.id,
@@ -174,6 +191,15 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
 
                 withContext(Dispatchers.Main) {
                     appointments = appointments + insertedRow
+
+                    // Instantly update the UI slot count
+                    val sId = scheduleEntry?.id
+                    if (sId != null) {
+                        scheduleCounts = scheduleCounts.toMutableMap().apply {
+                            this[sId] = (this[sId] ?: 0) + 1
+                        }
+                    }
+
                     currentReceipt = ReceiptData(type, formatToWebDate(scheduleDate), queueNumber)
                     showReceiptDialog = true
                     isLoading = false
@@ -200,23 +226,34 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text("Screenshot this receipt and present it on your scheduled date.", style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 16.dp))
                     Column(
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF1C1C2E)).padding(vertical = 24.dp, horizontal = 20.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .padding(vertical = 24.dp, horizontal = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("ENROLLMATE", color = Color.White.copy(alpha = 0.4f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
-                        Spacer(Modifier.height(12.dp))
-                        Text("QUEUE NO.", color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp, letterSpacing = 1.5.sp)
-                        Text("#${String.format("%03d", currentReceipt!!.queueNo)}", fontWeight = FontWeight.Black, fontSize = 56.sp, color = Color.White, letterSpacing = (-1).sp, lineHeight = 60.sp)
-                        Spacer(Modifier.height(12.dp))
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f), modifier = Modifier.padding(horizontal = 4.dp))
-                        Spacer(Modifier.height(12.dp))
+                        Text("ENROLLMATE", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+                        Spacer(Modifier.height(16.dp))
+                        Text("QUEUE NO.", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, letterSpacing = 1.5.sp)
+                        Text(
+                            text = "#${String.format("%03d", currentReceipt!!.queueNo)}",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 56.sp,
+                            color = Color.White,
+                            letterSpacing = (-1).sp,
+                            lineHeight = 60.sp
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(horizontal = 4.dp))
+                        Spacer(Modifier.height(16.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Column {
-                                Text("TYPE", color = Color.White.copy(alpha = 0.4f), fontSize = 9.sp, letterSpacing = 1.sp)
+                                Text("TYPE", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, letterSpacing = 1.sp)
                                 Text(currentReceipt!!.type, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("DATE", color = Color.White.copy(alpha = 0.4f), fontSize = 9.sp, letterSpacing = 1.sp)
+                                Text("DATE", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, letterSpacing = 1.sp)
                                 Text(currentReceipt!!.date, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
                         }
@@ -231,11 +268,87 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
         )
     }
 
+    // ── Cancellation Dialog ───────────────────────────────────────────────────
+    if (appointmentToCancel != null) {
+        AlertDialog(
+            onDismissRequest = { if (!isCancelling) appointmentToCancel = null },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text("Cancel Appointment", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+            },
+            text = {
+                Text("Are you sure you want to cancel your ${appointmentToCancel?.appointmentType} appointment on ${formatToWebDate(appointmentToCancel?.scheduledDate ?: "")}? This action cannot be undone.", color = Color.Gray)
+            },
+            dismissButton = {
+                Button(
+                    onClick = { appointmentToCancel = null },
+                    enabled = !isCancelling,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEEEEEE), contentColor = Color(0xFF888888)),
+                    elevation = ButtonDefaults.buttonElevation(0.dp)
+                ) {
+                    Text("Back", fontWeight = FontWeight.SemiBold)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isCancelling = true
+                        viewModel.viewModelScope.launch(Dispatchers.IO) {
+                            try {
+                                val targetId = appointmentToCancel?.id
+                                if (targetId != null) {
+                                    val updatedRow = appointmentToCancel!!.copy(status = "cancelled")
+                                    supabase.postgrest["appointment"].update(updatedRow) {
+                                        filter { eq("id", targetId) }
+                                    }
+
+                                    withContext(Dispatchers.Main) {
+                                        // Update the user's booking history
+                                        appointments = appointments.map {
+                                            if (it.id == targetId) updatedRow else it
+                                        }
+
+                                        // Instantly free up a slot in the UI!
+                                        val sId = appointmentToCancel?.scheduleId
+                                        if (sId != null) {
+                                            scheduleCounts = scheduleCounts.toMutableMap().apply {
+                                                this[sId] = (this[sId] ?: 1) - 1
+                                            }
+                                        }
+
+                                        appointmentToCancel = null
+                                        isCancelling = false
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    errorMessage = "Failed to cancel: ${e.localizedMessage}"
+                                    appointmentToCancel = null
+                                    isCancelling = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isCancelling,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    elevation = ButtonDefaults.buttonElevation(0.dp)
+                ) {
+                    if (isCancelling) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Cancel Booking", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        )
+    }
+
     // ── Main Layout ───────────────────────────────────────────────────────────
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White) // Clean white background for the web feel
+            .background(Color.White)
             .padding(24.dp)
     ) {
         Text(
@@ -284,7 +397,14 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                 item { Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFFF9FAFB)).padding(24.dp), contentAlignment = Alignment.Center) { Text("No open schedules available.", color = Color(0xFF9CA3AF), style = MaterialTheme.typography.bodySmall) } }
             } else {
                 items(availableSchedules, key = { it.id }) { schedule ->
-                    OpenScheduleCard(schedule = schedule, isLoading = isLoading, onBook = { bookAppointment(schedule.scheduleDate, selectedCategory) })
+                    // Pass the real-time capacity count down to the card
+                    val bookedCount = scheduleCounts[schedule.id] ?: 0
+                    OpenScheduleCard(
+                        schedule = schedule,
+                        bookedCount = bookedCount,
+                        isLoading = isLoading,
+                        onBook = { bookAppointment(schedule.scheduleDate, selectedCategory) }
+                    )
                 }
             }
 
@@ -299,7 +419,7 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                 item { Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFFF9FAFB)).padding(24.dp), contentAlignment = Alignment.Center) { Text("No upcoming appointments in this category.", color = Color(0xFF9CA3AF), style = MaterialTheme.typography.bodySmall) } }
             } else {
                 items(filteredList, key = { it.id ?: it.scheduledDate }) { appointment ->
-                    AppointmentCard(appointment)
+                    AppointmentCard(appointment, onCancelClick = { appointmentToCancel = appointment })
                 }
             }
             item { Spacer(Modifier.height(24.dp)) }
@@ -307,20 +427,21 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
     }
 }
 
-// ── Web-Style Open Schedule Card ──────────────────────────────────────────────
-
 @Composable
 private fun OpenScheduleCard(
     schedule: AppointmentScheduleEntry,
+    bookedCount: Int,
     isLoading: Boolean,
     onBook: () -> Unit
 ) {
+    val isFull = bookedCount >= schedule.capacity
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFE5E7EB)), // Subtle web border
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Flat design
+        border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -328,7 +449,6 @@ private fun OpenScheduleCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                // Formatted Date
                 Text(
                     text = formatToWebDate(schedule.scheduleDate),
                     fontWeight = FontWeight.Bold,
@@ -336,7 +456,6 @@ private fun OpenScheduleCard(
                     color = Color(0xFF1F2937)
                 )
                 Spacer(Modifier.height(6.dp))
-                // Appointment Type Badge (Pill)
                 Box(
                     modifier = Modifier
                         .background(Color(0xFFF3F4F6), RoundedCornerShape(4.dp))
@@ -353,16 +472,17 @@ private fun OpenScheduleCard(
             }
 
             Column(horizontalAlignment = Alignment.End) {
+                // Displays dynamic slot usage! (e.g. "Slots: 3 / 40")
                 Text(
-                    text = "Slots limit: ${schedule.capacity}",
-                    color = Color(0xFF6B7280),
+                    text = "Slots: $bookedCount / ${schedule.capacity}",
+                    color = if (isFull) Color(0xFFB91C1C) else Color(0xFF6B7280),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = onBook,
-                    enabled = !isLoading,
+                    enabled = !isLoading && !isFull, // Automatically disables if full
                     shape = RoundedCornerShape(6.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -375,7 +495,7 @@ private fun OpenScheduleCard(
                     if (isLoading) {
                         CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
                     } else {
-                        Text("Reserve", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color.White)
+                        Text(if (isFull) "Full" else "Reserve", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = if(isFull) Color(0xFF9CA3AF) else Color.White)
                     }
                 }
             }
@@ -383,20 +503,18 @@ private fun OpenScheduleCard(
     }
 }
 
-// ── Web-Style Booking History Card ────────────────────────────────────────────
-
 @Composable
-fun AppointmentCard(appointment: AppointmentScheduleRow) {
+fun AppointmentCard(appointment: AppointmentScheduleRow, onCancelClick: () -> Unit) {
     val statusColor = when (appointment.status.lowercase()) {
-        "scheduled" -> Color(0xFF047857) // Dark Emerald
-        "completed" -> Color(0xFF1D4ED8) // Dark Blue
-        "cancelled" -> Color(0xFFB91C1C) // Dark Red
+        "scheduled" -> Color(0xFF047857)
+        "completed" -> Color(0xFF1D4ED8)
+        "cancelled" -> Color(0xFFB91C1C)
         else -> Color(0xFF4B5563)
     }
     val statusBg = when (appointment.status.lowercase()) {
-        "scheduled" -> Color(0xFFD1FAE5) // Light Emerald
-        "completed" -> Color(0xFFDBEAFE) // Light Blue
-        "cancelled" -> Color(0xFFFEE2E2) // Light Red
+        "scheduled" -> Color(0xFFD1FAE5)
+        "completed" -> Color(0xFFDBEAFE)
+        "cancelled" -> Color(0xFFFEE2E2)
         else -> Color(0xFFF3F4F6)
     }
 
@@ -404,8 +522,8 @@ fun AppointmentCard(appointment: AppointmentScheduleRow) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFE5E7EB)), // Subtle web border
-        elevation = CardDefaults.cardElevation(0.dp) // Flat design
+        border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -413,7 +531,6 @@ fun AppointmentCard(appointment: AppointmentScheduleRow) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                // Formatted Date
                 Text(
                     text = formatToWebDate(appointment.scheduledDate),
                     fontWeight = FontWeight.Bold,
@@ -421,7 +538,6 @@ fun AppointmentCard(appointment: AppointmentScheduleRow) {
                     color = Color(0xFF1F2937)
                 )
                 Spacer(Modifier.height(6.dp))
-                // Appointment Type Badge (Pill)
                 Box(
                     modifier = Modifier
                         .background(Color(0xFFF3F4F6), RoundedCornerShape(4.dp))
@@ -437,20 +553,38 @@ fun AppointmentCard(appointment: AppointmentScheduleRow) {
                 }
             }
 
-            // Status Badge
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(statusBg)
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = appointment.status.uppercase(),
-                    color = statusColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
+            Column(horizontalAlignment = Alignment.End) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(statusBg)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = appointment.status.uppercase(),
+                        color = statusColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                if (appointment.status.lowercase() == "scheduled") {
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onCancelClick() }
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Cancel Booking",
+                            color = Color(0xFFB91C1C),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
     }
