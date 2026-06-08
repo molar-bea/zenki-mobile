@@ -1,57 +1,44 @@
 package com.symphonix.enrollmate.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewModelScope
+import androidx.compose.ui.tooling.preview.Preview
 import com.symphonix.enrollmate.AppViewModel
 import com.symphonix.enrollmate.ui.theme.Secondary
-import com.symphonix.enrollmate.ui.theme.Tertiary
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import services.ApiService
+import models.ChecklistProgressWithRequirement
+import models.Requirement
+import services.ChecklistService
+import androidx.compose.runtime.collectAsState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChecklistScreen(viewModel: AppViewModel) {
-    val settings by viewModel.settings.collectAsState()
-    var tasks by remember { mutableStateOf<List<ChecklistTask>>(emptyList()) }
+    val settingsState = viewModel.settings.collectAsState()
+    val settings = settingsState.value
+    var tasks by remember { mutableStateOf<List<ChecklistProgressWithRequirement>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(settings.currentUserId) {
         settings.currentUserId?.let { userId ->
-            viewModel.viewModelScope.launch(Dispatchers.IO) {
+            scope.launch {
                 try {
-                    val response = ApiService.getChecklist(userId)
-                    if (response.optInt("success") == 1) {
-                        val data = response.optJSONArray("data") ?: JSONArray()
-                        val list = mutableListOf<ChecklistTask>()
-                        for (i in 0 until data.length()) {
-                            val obj = data.getJSONObject(i)
-                            val req = obj.optJSONObject("requirement") ?: org.json.JSONObject()
-                            list.add(
-                                ChecklistTask(
-                                    title = req.optString("name"),
-                                    startDate = req.optString("start_date"),
-                                    endDate = req.optString("end_date"),
-                                    status = obj.optString("status")
-                                )
-                            )
-                        }
-                        withContext(Dispatchers.Main) {
-                            tasks = list
-                        }
-                    }
+                    val fetchedTasks = ChecklistService.getChecklistForUser(userId)
+                    tasks = fetchedTasks
                 } catch (e: Exception) {
                     // handle error
                 } finally {
@@ -63,21 +50,43 @@ fun ChecklistScreen(viewModel: AppViewModel) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            text = "Checklist",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        if (isLoading) {
-            CircularProgressIndicator()
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(tasks) { task ->
-                    TaskCard(task)
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        "Checklist",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { /* Handle back - maybe pass navController */ }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+        ) {
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (tasks.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No tasks found.")
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(tasks) { task ->
+                        TaskCard(task)
+                    }
                 }
             }
         }
@@ -85,28 +94,33 @@ fun ChecklistScreen(viewModel: AppViewModel) {
 }
 
 @Composable
-fun TaskCard(task: ChecklistTask) {
+fun TaskCard(task: ChecklistProgressWithRequirement) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Secondary)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = task.title,
+                    text = task.requirement?.name ?: "Unknown Task",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Date Start: ${task.requirement?.startDate ?: "N/A"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.DarkGray
                 )
                 Text(
-                    text = "Date Start: ${task.startDate}",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    text = "Date End: ${task.endDate}",
-                    style = MaterialTheme.typography.bodySmall
+                    text = "Date End: ${task.requirement?.endDate ?: "N/A"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.DarkGray
                 )
             }
             
@@ -117,20 +131,19 @@ fun TaskCard(task: ChecklistTask) {
 
 @Composable
 fun StatusPill(status: String) {
-    val backgroundColor = when (status.uppercase()) {
-        "COMPLETED" -> Tertiary
-        "ON-GOING" -> Secondary
-        else -> Color.Gray
+    val (backgroundColor, textColor, label) = when (status.lowercase()) {
+        "completed" -> Triple(Color(0xFFC8E6C9), Color(0xFF2E7D32), "COMPLETED")
+        "on-going" -> Triple(Color(0xFFFFCCBC), Color(0xFFD84315), "ON-GOING")
+        else -> Triple(Color(0xFFE0E0E0), Color(0xFF616161), "TO-DO")
     }
-    val textColor = Color.Black
 
-    Box(
-        modifier = Modifier
-            .background(backgroundColor, RoundedCornerShape(16.dp))
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+    Surface(
+        color = backgroundColor,
+        shape = RoundedCornerShape(12.dp)
     ) {
         Text(
-            text = status.uppercase(),
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = textColor
@@ -138,9 +151,75 @@ fun StatusPill(status: String) {
     }
 }
 
-data class ChecklistTask(
-    val title: String,
-    val startDate: String,
-    val endDate: String,
-    val status: String
-)
+@OptIn(ExperimentalMaterial3Api::class)
+@Preview(showBackground = true)
+@Composable
+fun ChecklistScreenPreview() {
+    val mockTasks = listOf(
+        ChecklistProgressWithRequirement(
+            id = "1",
+            status = "completed",
+            createdAt = "2026-06-02",
+            requirement = Requirement(
+                id = "req1",
+                name = "Submit credentials to the admissions office.",
+                startDate = "06/02/2026",
+                endDate = "06/15/2026"
+            )
+        ),
+        ChecklistProgressWithRequirement(
+            id = "2",
+            status = "on-going",
+            createdAt = "2026-06-02",
+            requirement = Requirement(
+                id = "req2",
+                name = "Second Task",
+                startDate = "06/02/2026",
+                endDate = "06/15/2026"
+            )
+        ),
+        ChecklistProgressWithRequirement(
+            id = "3",
+            status = "todo",
+            createdAt = "2026-06-02",
+            requirement = Requirement(
+                id = "req3",
+                name = "Third task",
+                startDate = "06/02/2026",
+                endDate = "06/15/2026"
+            )
+        )
+    )
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        "Checklist",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = {}) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+        ) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(mockTasks) { task ->
+                    TaskCard(task)
+                }
+            }
+        }
+    }
+}
