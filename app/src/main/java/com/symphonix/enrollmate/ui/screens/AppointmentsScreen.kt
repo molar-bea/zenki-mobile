@@ -82,6 +82,9 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
     var availableSchedules by remember { mutableStateOf<List<AppointmentScheduleEntry>>(emptyList()) }
     var appointments by remember { mutableStateOf<List<AppointmentScheduleRow>>(emptyList()) }
 
+    // NEW: Tracks how many people have booked each schedule ID globally
+    var scheduleCounts by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -97,6 +100,7 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
 
         viewModel.viewModelScope.launch(Dispatchers.IO) {
             try {
+                // 1. Fetch available schedules
                 val schedules = supabase.postgrest["appointment_schedule"]
                     .select {
                         filter {
@@ -104,12 +108,30 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                             eq("is_deleted", false)
                         }
                     }.decodeList<AppointmentScheduleEntry>()
-                withContext(Dispatchers.Main) { availableSchedules = schedules }
+
+                // 2. NEW: Fetch ALL active global appointments to calculate capacities
+                val globalBookings = supabase.postgrest["appointment"]
+                    .select {
+                        filter {
+                            eq("appointment_type", selectedCategory)
+                            eq("is_deleted", false)
+                            neq("status", "cancelled") // Do not count cancelled bookings!
+                        }
+                    }.decodeList<AppointmentScheduleRow>()
+
+                // Count how many bookings exist for each schedule ID
+                val counts = globalBookings.groupingBy { it.scheduleId ?: "" }.eachCount()
+
+                withContext(Dispatchers.Main) {
+                    availableSchedules = schedules
+                    scheduleCounts = counts
+                }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { errorMessage = "Admin Table Error: ${e.localizedMessage}" }
             }
 
             try {
+                // 3. Fetch the logged-in user's personal appointments
                 settings.currentUserId?.let { userId ->
                     val fetchedAppointments = supabase.postgrest["appointment"]
                         .select {
@@ -144,15 +166,10 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                 val scheduleEntry = availableSchedules.find { it.scheduleDate == scheduleDate }
                 val capacity = scheduleEntry?.capacity ?: 50
 
-                val existingForSlot = supabase.postgrest["appointment"]
-                    .select {
-                        filter {
-                            eq("schedule_id", scheduleEntry?.id ?: "")
-                            eq("is_deleted", false)
-                        }
-                    }.decodeList<AppointmentScheduleRow>()
+                // Use our global map to get the real-time capacity count
+                val currentBooked = scheduleCounts[scheduleEntry?.id ?: ""] ?: 0
 
-                if (existingForSlot.size >= capacity) {
+                if (currentBooked >= capacity) {
                     withContext(Dispatchers.Main) {
                         errorMessage = "Sorry, all $type slots for $scheduleDate are fully booked."
                         isLoading = false
@@ -160,7 +177,7 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                     return@launch
                 }
 
-                val queueNumber = existingForSlot.size + 1
+                val queueNumber = currentBooked + 1
                 val newAppointment = AppointmentScheduleRow(
                     userId = settings.currentUserId,
                     scheduleId = scheduleEntry?.id,
@@ -174,6 +191,15 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
 
                 withContext(Dispatchers.Main) {
                     appointments = appointments + insertedRow
+
+                    // Instantly update the UI slot count
+                    val sId = scheduleEntry?.id
+                    if (sId != null) {
+                        scheduleCounts = scheduleCounts.toMutableMap().apply {
+                            this[sId] = (this[sId] ?: 0) + 1
+                        }
+                    }
+
                     currentReceipt = ReceiptData(type, formatToWebDate(scheduleDate), queueNumber)
                     showReceiptDialog = true
                     isLoading = false
@@ -278,9 +304,19 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                                     }
 
                                     withContext(Dispatchers.Main) {
+                                        // Update the user's booking history
                                         appointments = appointments.map {
                                             if (it.id == targetId) updatedRow else it
                                         }
+
+                                        // Instantly free up a slot in the UI!
+                                        val sId = appointmentToCancel?.scheduleId
+                                        if (sId != null) {
+                                            scheduleCounts = scheduleCounts.toMutableMap().apply {
+                                                this[sId] = (this[sId] ?: 1) - 1
+                                            }
+                                        }
+
                                         appointmentToCancel = null
                                         isCancelling = false
                                     }
@@ -361,7 +397,14 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                 item { Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFFF9FAFB)).padding(24.dp), contentAlignment = Alignment.Center) { Text("No open schedules available.", color = Color(0xFF9CA3AF), style = MaterialTheme.typography.bodySmall) } }
             } else {
                 items(availableSchedules, key = { it.id }) { schedule ->
-                    OpenScheduleCard(schedule = schedule, isLoading = isLoading, onBook = { bookAppointment(schedule.scheduleDate, selectedCategory) })
+                    // Pass the real-time capacity count down to the card
+                    val bookedCount = scheduleCounts[schedule.id] ?: 0
+                    OpenScheduleCard(
+                        schedule = schedule,
+                        bookedCount = bookedCount,
+                        isLoading = isLoading,
+                        onBook = { bookAppointment(schedule.scheduleDate, selectedCategory) }
+                    )
                 }
             }
 
@@ -387,9 +430,12 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
 @Composable
 private fun OpenScheduleCard(
     schedule: AppointmentScheduleEntry,
+    bookedCount: Int,
     isLoading: Boolean,
     onBook: () -> Unit
 ) {
+    val isFull = bookedCount >= schedule.capacity
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
@@ -426,16 +472,17 @@ private fun OpenScheduleCard(
             }
 
             Column(horizontalAlignment = Alignment.End) {
+                // Displays dynamic slot usage! (e.g. "Slots: 3 / 40")
                 Text(
-                    text = "Slots limit: ${schedule.capacity}",
-                    color = Color(0xFF6B7280),
+                    text = "Slots: $bookedCount / ${schedule.capacity}",
+                    color = if (isFull) Color(0xFFB91C1C) else Color(0xFF6B7280),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = onBook,
-                    enabled = !isLoading,
+                    enabled = !isLoading && !isFull, // Automatically disables if full
                     shape = RoundedCornerShape(6.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -448,7 +495,7 @@ private fun OpenScheduleCard(
                     if (isLoading) {
                         CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
                     } else {
-                        Text("Reserve", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color.White)
+                        Text(if (isFull) "Full" else "Reserve", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = if(isFull) Color(0xFF9CA3AF) else Color.White)
                     }
                 }
             }

@@ -60,7 +60,7 @@ fun DashboardScreen(viewModel: AppViewModel) {
             modifier = Modifier.padding(bottom = 6.dp)
         )
         Text(
-            text = "Welcome to enrollmate, enroll with ease.",
+            text = "EnrollMate: Smooth scheduling, seamless enrollment.",
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFF6B7280),
             modifier = Modifier.padding(bottom = 24.dp)
