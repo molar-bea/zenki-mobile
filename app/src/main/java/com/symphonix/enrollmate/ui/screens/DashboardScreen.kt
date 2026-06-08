@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +39,12 @@ fun DashboardScreen(viewModel: AppViewModel) {
     LaunchedEffect(Unit) {
         viewModel.refreshAnnouncements()
     }
+
+    // Sort pinned to top, then by newest
+    val sortedAnnouncements = announcements.sortedWith(
+        compareByDescending<AnnouncementModel> { it.isPinned }
+            .thenByDescending { it.createdAt }
+    )
 
     Column(
         modifier = Modifier
@@ -132,7 +139,7 @@ fun DashboardScreen(viewModel: AppViewModel) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(announcements) { announcement ->
+                items(sortedAnnouncements, key = { it.id }) { announcement ->
                     AnnouncementCard(announcement)
                 }
                 item { Spacer(Modifier.height(24.dp)) }
@@ -164,23 +171,53 @@ fun AnnouncementCard(announcement: AnnouncementModel) {
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Badges Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (announcement.isPinned) {
+                    Row(
+                        modifier = Modifier
+                            .background(Color(0xFFFEE2E2), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = "Pinned",
+                            tint = Color(0xFFB91C1C),
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "PINNED",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFB91C1C),
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+
+                val priorityBg = if (announcement.priority.equals("High", true)) Color(0xFFFEF3C7) else Color(0xFFF3F4F6)
+                val priorityText = if (announcement.priority.equals("High", true)) Color(0xFFD97706) else Color(0xFF4B5563)
+
                 Box(
                     modifier = Modifier
-                        .background(Color(0xFFF3F4F6), RoundedCornerShape(4.dp))
+                        .background(priorityBg, RoundedCornerShape(4.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "STANDARD",
+                        text = announcement.priority.uppercase(),
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF4B5563),
+                        color = priorityText,
                         letterSpacing = 0.5.sp
                     )
                 }
+
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = dateString,

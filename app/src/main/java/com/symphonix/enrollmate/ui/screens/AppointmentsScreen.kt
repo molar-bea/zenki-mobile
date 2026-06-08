@@ -199,24 +199,43 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text("Screenshot this receipt and present it on your scheduled date.", style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 16.dp))
+
+                    // Redesigned Ticket UI matching the app's Primary Color
                     Column(
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF1C1C2E)).padding(vertical = 24.dp, horizontal = 20.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary) // Using the app's brand color
+                            .padding(vertical = 24.dp, horizontal = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("ENROLLMATE", color = Color.White.copy(alpha = 0.4f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
-                        Spacer(Modifier.height(12.dp))
-                        Text("QUEUE NO.", color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp, letterSpacing = 1.5.sp)
-                        Text("#${String.format("%03d", currentReceipt!!.queueNo)}", fontWeight = FontWeight.Black, fontSize = 56.sp, color = Color.White, letterSpacing = (-1).sp, lineHeight = 60.sp)
-                        Spacer(Modifier.height(12.dp))
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f), modifier = Modifier.padding(horizontal = 4.dp))
-                        Spacer(Modifier.height(12.dp))
+                        Text("ENROLLMATE", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+                        Spacer(Modifier.height(16.dp))
+                        Text("QUEUE NO.", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, letterSpacing = 1.5.sp)
+                        Text(
+                            text = "#${String.format("%03d", currentReceipt!!.queueNo)}",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 56.sp,
+                            color = Color.White,
+                            letterSpacing = (-1).sp,
+                            lineHeight = 60.sp
+                        )
+                        Spacer(Modifier.height(16.dp))
+
+                        // Separator line
+                        HorizontalDivider(
+                            color = Color.White.copy(alpha = 0.3f),
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                        Spacer(Modifier.height(16.dp))
+
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Column {
-                                Text("TYPE", color = Color.White.copy(alpha = 0.4f), fontSize = 9.sp, letterSpacing = 1.sp)
+                                Text("TYPE", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, letterSpacing = 1.sp)
                                 Text(currentReceipt!!.type, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("DATE", color = Color.White.copy(alpha = 0.4f), fontSize = 9.sp, letterSpacing = 1.sp)
+                                Text("DATE", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, letterSpacing = 1.sp)
                                 Text(currentReceipt!!.date, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
                         }
@@ -224,7 +243,12 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
                 }
             },
             confirmButton = {
-                Button(onClick = { showReceiptDialog = false }, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                Button(
+                    onClick = { showReceiptDialog = false },
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
                     Text("Done", fontWeight = FontWeight.SemiBold)
                 }
             }
