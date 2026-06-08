@@ -24,10 +24,11 @@ import com.symphonix.enrollmate.ui.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import services.supabase
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.gotrue.providers.builtin.Email
-import io.github.jan.supabase.postgrest.postgrest
 import services.DatabaseService
 import models.UserModel
 import java.time.Instant
@@ -187,11 +188,16 @@ fun SignUpScreen(navController: NavController, viewModel: AppViewModel) {
                         isLoading = true
                         viewModel.viewModelScope.launch(Dispatchers.IO) {
                             try {
+                                // 1. Sign up with email, password AND metadata
                                 supabase.auth.signUpWith(Email) {
                                     this.email = email
                                     this.password = password
+                                    this.data = buildJsonObject {
+                                        put("full_name", fullName)
+                                    }
                                 }
 
+                                // 2. Grab the new user ID to store locally
                                 val userId = supabase.auth.currentUserOrNull()?.id
                                 if (userId != null) {
                                     val newUser = UserModel(
@@ -202,15 +208,8 @@ fun SignUpScreen(navController: NavController, viewModel: AppViewModel) {
                                         createdAt = Instant.now().toString()
                                     )
 
-                                    try {
-                                        supabase.postgrest.from("user").insert(newUser)
-                                    } catch (dbError: Exception) {
-                                        withContext(Dispatchers.Main) {
-                                            errorMessage = "Database Error: ${dbError.message}"
-                                            isLoading = false
-                                        }
-                                        return@launch
-                                    }
+                                    // The database trigger automatically inserts the row into public.user,
+                                    // so we only need to save the user to our local SQLite cache.
                                     DatabaseService.upsertUser(newUser)
                                 }
 
