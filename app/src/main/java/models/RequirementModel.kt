@@ -1,5 +1,6 @@
 package models
 
+import models.toMap
 import org.json.JSONObject
 
 data class RequirementModel(

@@ -6,14 +6,10 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ChecklistProgressWithRequirement(
     val id: String,
-    @SerialName("application_id")
-    val applicationId: String? = null,
     @SerialName("requirement_id")
     val requirementId: String? = null,
     @SerialName("user_id")
     val userId: String? = null,
-    @SerialName("reviewer_remarks")
-    val reviewerRemarks: String? = null,
     val status: String,
     @SerialName("is_deleted")
     val isDeleted: Boolean = false,

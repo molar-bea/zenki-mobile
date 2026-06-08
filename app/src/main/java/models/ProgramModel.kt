@@ -1,5 +1,6 @@
 package models
 
+import models.toMap
 import org.json.JSONObject
 
 data class ProgramModel(
@@ -13,7 +14,7 @@ data class ProgramModel(
     val isDeleted: Boolean = false,
     val createdAt: String
 ) {
-    fun toMap() = mapOf(
+    fun toMap(): Map<String, Any?> = mapOf(
         "id" to id,
         "name" to name,
         "description" to description,
@@ -25,10 +26,10 @@ data class ProgramModel(
         "created_at" to createdAt
     )
 
-    fun toJson() = JSONObject(toMap()).toString()
+    fun toJson(): String = JSONObject(toMap()).toString()
 
     companion object {
-        fun fromMap(map: Map<String, Any?>) = ProgramModel(
+        fun fromMap(map: Map<String, Any?>): ProgramModel = ProgramModel(
             id = map["id"]?.toString().orEmpty(),
             name = map["name"]?.toString().orEmpty(),
             description = map["description"]?.toString(),
@@ -40,6 +41,6 @@ data class ProgramModel(
             createdAt = map["created_at"]?.toString().orEmpty()
         )
 
-        fun fromJson(source: String) = fromMap(JSONObject(source).toMap() as Map<String, Any?>)
+        fun fromJson(source: String): ProgramModel = fromMap(JSONObject(source).toMap() as Map<String, Any?>)
     }
 }
