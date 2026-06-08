@@ -7,20 +7,25 @@ import org.json.JSONObject
 @Serializable
 data class AnnouncementModel(
     val id: String,
+    @SerialName("user_id")
+    val userId: String? = null,
     val title: String,
     val body: String? = null,
-    @SerialName("target_role")
-    val targetRole: String? = null,
+    val priority: String = "Standard",
+    @SerialName("is_pinned")
+    val isPinned: Boolean = false,
     @SerialName("is_deleted")
-    val isDeleted: Boolean = false,
+    val isDeleted: Boolean? = false, // Nullable to prevent parse crashes
     @SerialName("created_at")
-    val createdAt: String
+    val createdAt: String? = null    // Nullable to prevent parse crashes
 ) {
     fun toMap() = mapOf(
         "id" to id,
+        "user_id" to userId,
         "title" to title,
         "body" to body,
-        "target_role" to targetRole,
+        "priority" to priority,
+        "is_pinned" to isPinned,
         "is_deleted" to isDeleted,
         "created_at" to createdAt
     )
@@ -37,13 +42,23 @@ data class AnnouncementModel(
                 else -> false
             }
 
+            val isPinnedVal = map["is_pinned"]
+            val isPinned = when (isPinnedVal) {
+                is Boolean -> isPinnedVal
+                is Int -> isPinnedVal == 1
+                is String -> isPinnedVal.lowercase() == "true" || isPinnedVal == "1"
+                else -> false
+            }
+
             return AnnouncementModel(
                 id = map["id"]?.toString().orEmpty(),
+                userId = map["user_id"]?.toString(),
                 title = map["title"]?.toString().orEmpty(),
                 body = map["body"]?.toString(),
-                targetRole = map["target_role"]?.toString(),
+                priority = map["priority"]?.toString() ?: "Standard",
+                isPinned = isPinned,
                 isDeleted = isDeleted,
-                createdAt = (map["created_at"] ?: map["createdAt"])?.toString().orEmpty()
+                createdAt = (map["created_at"] ?: map["createdAt"])?.toString()
             )
         }
 
