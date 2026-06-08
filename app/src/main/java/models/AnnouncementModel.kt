@@ -15,9 +15,9 @@ data class AnnouncementModel(
     @SerialName("is_pinned")
     val isPinned: Boolean = false,
     @SerialName("is_deleted")
-    val isDeleted: Boolean = false,
+    val isDeleted: Boolean? = false, // Nullable to prevent parse crashes
     @SerialName("created_at")
-    val createdAt: String
+    val createdAt: String? = null    // Nullable to prevent parse crashes
 ) {
     fun toMap() = mapOf(
         "id" to id,
@@ -58,7 +58,7 @@ data class AnnouncementModel(
                 priority = map["priority"]?.toString() ?: "Standard",
                 isPinned = isPinned,
                 isDeleted = isDeleted,
-                createdAt = (map["created_at"] ?: map["createdAt"])?.toString().orEmpty()
+                createdAt = (map["created_at"] ?: map["createdAt"])?.toString()
             )
         }
 

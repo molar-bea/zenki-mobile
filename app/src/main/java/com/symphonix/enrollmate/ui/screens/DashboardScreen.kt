@@ -60,7 +60,7 @@ fun DashboardScreen(viewModel: AppViewModel) {
             modifier = Modifier.padding(bottom = 6.dp)
         )
         Text(
-            text = "Here is your dashboard overview for the day.",
+            text = "Welcome to enrollmate, enroll with ease.",
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFF6B7280),
             modifier = Modifier.padding(bottom = 24.dp)
@@ -151,15 +151,16 @@ fun DashboardScreen(viewModel: AppViewModel) {
 @Composable
 fun AnnouncementCard(announcement: AnnouncementModel) {
     val dateString = try {
+        val createdAt = announcement.createdAt ?: ""
         val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
         val formatter = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-        val parsed = parser.parse(announcement.createdAt)
-        if (parsed != null) formatter.format(parsed) else announcement.createdAt.split("T")[0]
+        val parsed = parser.parse(createdAt)
+        if (parsed != null) formatter.format(parsed) else createdAt.split("T")[0]
     } catch (e: Exception) {
         try {
-            announcement.createdAt.split("T")[0]
+            (announcement.createdAt ?: "").split("T")[0]
         } catch (ex: Exception) {
-            announcement.createdAt
+            announcement.createdAt ?: ""
         }
     }
 
@@ -171,7 +172,6 @@ fun AnnouncementCard(announcement: AnnouncementModel) {
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Badges Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
