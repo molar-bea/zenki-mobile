@@ -1,6 +1,11 @@
 package services
 
-import models.*
+import models.UserModel
+import models.ProgramModel
+import models.RequirementModel
+import models.ApplicationModel
+import models.AnnouncementModel
+import models.AppSettingsModel
 import models.toMap
 import org.json.JSONObject
 import java.io.File
@@ -138,15 +143,11 @@ object DatabaseService {
             """
             CREATE TABLE IF NOT EXISTS appointment (
               id TEXT PRIMARY KEY,
-              application_id TEXT,
               json_data TEXT NOT NULL,
               sync_state INTEGER NOT NULL DEFAULT 0,
               is_deleted INTEGER NOT NULL DEFAULT 0,
               created_at TEXT
             );
-            """,
-            """
-            CREATE INDEX IF NOT EXISTS idx_appointment_application_id ON appointment(application_id);
             """,
             """
             CREATE INDEX IF NOT EXISTS idx_appointment_scheduled_date ON appointment((json_extract(json_data, '$.scheduled_date')));
@@ -181,14 +182,14 @@ object DatabaseService {
         }
     }
 
-    private fun upsertRow(table: String, id: String, jsonData: String, createdAt: String?): Boolean {
+    private fun upsertRow(table: String, id: String, jsonData: String, createdAt: String?, isDeleted: Boolean = false): Boolean {
         val sql = "INSERT INTO $table (id, json_data, sync_state, is_deleted, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET json_data = excluded.json_data, sync_state = excluded.sync_state, is_deleted = excluded.is_deleted, created_at = COALESCE(excluded.created_at, $table.created_at)"
         conn?.prepareStatement(sql).use { ps ->
             if (ps == null) return false
             ps.setString(1, id)
             ps.setString(2, jsonData)
             ps.setInt(3, SYNC_PENDING)
-            ps.setInt(4, 0)
+            ps.setInt(4, if (isDeleted) 1 else 0)
             if (createdAt != null) ps.setString(5, createdAt) else ps.setNull(5, java.sql.Types.VARCHAR)
             ps.executeUpdate()
             return true
@@ -224,7 +225,7 @@ object DatabaseService {
                     val syncState = rs.getInt("sync_state")
                     val isDeleted = rs.getInt("is_deleted")
                     val createdAt = rs.getString("created_at")
-                    val map = try {
+                    val map: Map<String, Any?> = try {
                         JSONObject(json).toMap()
                     } catch (ex: Exception) {
                         mapOf("_raw" to json)
@@ -262,13 +263,23 @@ object DatabaseService {
         if (raw == null) return results
 
         when (raw) {
+            is org.json.JSONArray -> {
+                for (i in 0 until raw.length()) {
+                    val item = raw.opt(i)
+                    if (item is JSONObject) {
+                        results.add(item.toMap())
+                    } else {
+                        results.add(mapOf("_value" to item, "_external_mapping" to "TODO_MAPPING_REQUIRED"))
+                    }
+                }
+            }
             is String -> {
                 // try JSON
                 try {
                     val jo = JSONObject(raw)
-                    val map = jo.toMap()
+                    val map: Map<String, Any?> = jo.toMap()
                     // If map contains an array root, expose its elements
-                    val arrayRootKey = map.keys.firstOrNull { k -> map[k] is List<*> }
+                    val arrayRootKey = map.keys.firstOrNull { k: String -> map[k] is List<*> }
                     if (arrayRootKey != null) {
                         val list = map[arrayRootKey] as List<*>
                         for (item in list) {
@@ -288,7 +299,7 @@ object DatabaseService {
             is Map<*, *> -> {
                 val m = raw as Map<String, Any?>
                 // check for common array roots
-                val arrayRootKey = m.keys.firstOrNull { k -> m[k] is List<*> }
+                val arrayRootKey = m.keys.firstOrNull { k: String -> m[k] is List<*> }
                 if (arrayRootKey != null) {
                     val list = m[arrayRootKey] as List<*>
                     for (item in list) {
@@ -479,12 +490,20 @@ object DatabaseService {
                 // Use TODO_MAPPING_REQUIRED flag when mapping is ambiguous.
                 val targetMap = mutableMapOf<String, Any?>()
                 targetMap.putAll(entry)
-                if (!targetMap.containsKey("is_deleted")) targetMap["is_deleted"] = false
+                
+                val isDeletedExternal = when(val del = entry["is_deleted"]) {
+                    is Boolean -> del
+                    is Int -> del == 1
+                    is String -> del.lowercase() == "true" || del == "1"
+                    else -> false
+                }
+                
+                if (!targetMap.containsKey("is_deleted")) targetMap["is_deleted"] = isDeletedExternal
                 if (!targetMap.containsKey("created_at")) targetMap["created_at"] = existing?.get("created_at")
 
                 val json = modelMapToJson(targetMap)
 
-                val ok = upsertRow(table, id, json, targetMap["created_at"]?.toString())
+                val ok = upsertRow(table, id, json, targetMap["created_at"]?.toString(), isDeletedExternal)
                 if (!ok) {
                     errors.add("Failed upsert id=$id")
                 } else {

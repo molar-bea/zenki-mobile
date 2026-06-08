@@ -1,5 +1,6 @@
 package models
 
+import models.toMap
 import org.json.JSONObject
 
 data class RequirementModel(
@@ -8,6 +9,8 @@ data class RequirementModel(
     val userId: String? = null,
     val name: String,
     val description: String? = null,
+    val startDate: String? = null,
+    val endDate: String? = null,
     val isMandatory: Boolean = true,
     val stepOrder: Int = 1,
     val isDeleted: Boolean = false,
@@ -19,6 +22,8 @@ data class RequirementModel(
         "user_id" to userId,
         "name" to name,
         "description" to description,
+        "start_date" to startDate,
+        "end_date" to endDate,
         "is_mandatory" to isMandatory,
         "step_order" to stepOrder,
         "is_deleted" to isDeleted,
@@ -34,6 +39,8 @@ data class RequirementModel(
             userId = map["user_id"]?.toString(),
             name = map["name"]?.toString().orEmpty(),
             description = map["description"]?.toString(),
+            startDate = map["start_date"]?.toString(),
+            endDate = map["end_date"]?.toString(),
             isMandatory = map["is_mandatory"]?.toString()?.toBoolean() ?: true,
             stepOrder = map["step_order"]?.toString()?.toIntOrNull() ?: 1,
             isDeleted = map["is_deleted"].toString().toBoolean(),

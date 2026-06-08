@@ -1,10 +1,10 @@
 package models
 
+import models.toMap
 import org.json.JSONObject
 
 data class AppointmentModel(
     val id: String,
-    val applicationId: String? = null,
     val appointmentType: String,
     val scheduledDate: String,
     val status: String = "scheduled",
@@ -13,7 +13,6 @@ data class AppointmentModel(
 ) {
     fun toMap() = mapOf(
         "id" to id,
-        "application_id" to applicationId,
         "appointment_type" to appointmentType,
         "scheduled_date" to scheduledDate,
         "status" to status,
@@ -26,7 +25,6 @@ data class AppointmentModel(
     companion object {
         fun fromMap(map: Map<String, Any?>) = AppointmentModel(
             id = map["id"]?.toString().orEmpty(),
-            applicationId = map["application_id"]?.toString(),
             appointmentType = map["appointment_type"]?.toString().orEmpty(),
             scheduledDate = map["scheduled_date"]?.toString().orEmpty(),
             status = map["status"]?.toString().orEmpty().ifEmpty { "scheduled" },

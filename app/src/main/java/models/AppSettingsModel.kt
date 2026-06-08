@@ -8,7 +8,8 @@ data class AppSettingsModel(
     val keepScreenOn: Boolean = false,
     val isUserLoggedIn: Boolean = false,
     val currentUserId: String? = null,
-    val currentUserFullName: String? = null
+    val currentUserFullName: String? = null,
+    val currentUserEmail: String? = null,
 ) {
     fun toMap() = mapOf(
         "id" to id,
