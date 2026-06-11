@@ -1,16 +1,22 @@
 package models
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import models.toMap
 import org.json.JSONObject
 
-// Transformed from ApplicationDocumentModel -> ChecklistProgressModel
+@Serializable
 data class ChecklistProgressModel(
     val id: String,
+    @SerialName("requirement_id")
     val requirementId: String? = null,
+    @SerialName("user_id")
     val userId: String? = null,
     val status: String = "prepared", // matches checklist_status_enum
+    @SerialName("is_deleted")
     val isDeleted: Boolean = false,
     val isSynchronized: Boolean = false,
+    @SerialName("created_at")
     val createdAt: String
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
