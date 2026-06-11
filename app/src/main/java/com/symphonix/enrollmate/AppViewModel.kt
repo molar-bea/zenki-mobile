@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import models.AnnouncementModel
 import models.AppSettingsModel
+import models.ChecklistProgressWithRequirement
 import services.DatabaseService
 import services.supabase
 import io.github.jan.supabase.gotrue.auth
@@ -40,9 +41,62 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoadingAnnouncements = MutableStateFlow(false)
     val isLoadingAnnouncements: StateFlow<Boolean> = _isLoadingAnnouncements.asStateFlow()
 
+    private val _checklist = MutableStateFlow<List<ChecklistProgressWithRequirement>>(emptyList())
+    val checklist: StateFlow<List<ChecklistProgressWithRequirement>> = _checklist.asStateFlow()
+
+    private val _isLoadingChecklist = MutableStateFlow(false)
+    val isLoadingChecklist: StateFlow<Boolean> = _isLoadingChecklist.asStateFlow()
+
     init {
+        val currentSettings = _settings.value
+        
         refreshAnnouncements()
         refreshUserProfile()
+        
+        if (currentSettings.isUserLoggedIn && currentSettings.currentUserId != null) {
+            refreshChecklist()
+        }
+    }
+
+    fun refreshChecklist() {
+        val userId = settings.value.currentUserId
+        if (userId == null) {
+            return
+        }
+        viewModelScope.launch {
+            _isLoadingChecklist.value = true
+            try {
+                val data = services.ChecklistService.getChecklistForUser(userId.toString())
+                _checklist.value = data
+            } catch (e: Exception) {
+                // ignore error
+            } finally {
+                _isLoadingChecklist.value = false
+            }
+        }
+    }
+
+    fun updateChecklistStatus(requirementId: String, newStatus: String) {
+        val userId = settings.value.currentUserId ?: return
+        val previousList = _checklist.value
+
+        // Optimistic update
+        _checklist.value = previousList.map { item ->
+            if (item.requirementId == requirementId) item.copy(status = newStatus) else item
+        }
+
+        viewModelScope.launch {
+            try {
+                val success = services.ChecklistService.updateChecklistStatus(requirementId, userId, newStatus)
+                if (!success) {
+                    // Revert on failure
+                    _checklist.value = previousList
+                }
+            } catch (e: Exception) {
+                // Revert on failure
+                _checklist.value = previousList
+            }
+        }
     }
 
     private fun refreshUserProfile() {
@@ -94,16 +148,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateSettings(newSettings: AppSettingsModel) {
-        viewModelScope.launch {
-            // 4. Save the login state natively to the Android device whenever it changes
-            prefs.edit().apply {
-                putBoolean("is_logged_in", newSettings.isUserLoggedIn)
-                putString("user_id", newSettings.currentUserId)
-                putString("user_name", newSettings.currentUserFullName)
-                putString("user_email", newSettings.currentUserEmail)
-                apply()
-            }
-            _settings.value = newSettings
+        // 4. Save the login state natively to the Android device whenever it changes
+        prefs.edit().apply {
+            putBoolean("is_logged_in", newSettings.isUserLoggedIn)
+            putString("user_id", newSettings.currentUserId)
+            putString("user_name", newSettings.currentUserFullName)
+            putString("user_email", newSettings.currentUserEmail)
+            apply()
+        }
+        _settings.value = newSettings
+        
+        if (newSettings.isUserLoggedIn && newSettings.currentUserId != null) {
+            refreshChecklist()
+        } else if (!newSettings.isUserLoggedIn) {
+            // Clear checklist on logout
+            _checklist.value = emptyList()
         }
     }
 
