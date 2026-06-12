@@ -262,7 +262,7 @@ fun AppointmentsScreen(viewModel: AppViewModel) {
             },
             confirmButton = {
                 Button(onClick = { showReceiptDialog = false }, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                    Text("Done", fontWeight = FontWeight.SemiBold)
+                    Text("Done",color= Color.White, fontWeight = FontWeight.SemiBold)
                 }
             }
         )

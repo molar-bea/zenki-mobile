@@ -13,11 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.tooling.preview.Preview
 import com.symphonix.enrollmate.AppViewModel
 import com.symphonix.enrollmate.ui.theme.Secondary
 import models.ChecklistProgressWithRequirement
-import models.Requirement
 import androidx.compose.runtime.collectAsState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,7 +108,7 @@ fun TaskCard(
                     color = Color.DarkGray
                 )
             }
-            
+
             StatusPill(
                 status = task.status,
                 onStatusChange = onStatusChange
@@ -169,78 +167,6 @@ fun StatusPill(status: String, onStatusChange: (String) -> Unit) {
                     showMenu = false
                 }
             )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Preview(showBackground = true)
-@Composable
-fun ChecklistScreenPreview() {
-    val mockTasks = listOf(
-        ChecklistProgressWithRequirement(
-            id = "1",
-            status = "completed",
-            createdAt = "2026-06-02",
-            requirement = Requirement(
-                id = "req1",
-                name = "Submit credentials to the admissions office.",
-                startDate = "06/02/2026",
-                endDate = "06/15/2026"
-            )
-        ),
-        ChecklistProgressWithRequirement(
-            id = "2",
-            status = "on-going",
-            createdAt = "2026-06-02",
-            requirement = Requirement(
-                id = "req2",
-                name = "Second Task",
-                startDate = "06/02/2026",
-                endDate = "06/15/2026"
-            )
-        ),
-        ChecklistProgressWithRequirement(
-            id = "3",
-            status = "todo",
-            createdAt = "2026-06-02",
-            requirement = Requirement(
-                id = "req3",
-                name = "Third task",
-                startDate = "06/02/2026",
-                endDate = "06/15/2026"
-            )
-        )
-    )
-
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "Checklist",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(mockTasks) { task ->
-                    TaskCard(
-                        task = task,
-                        isActive = task.status == "on-going",
-                        onStatusChange = {}
-                    )
-                }
-            }
         }
     }
 }

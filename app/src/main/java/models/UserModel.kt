@@ -13,8 +13,6 @@ data class UserModel(
     val email: String,
     @SerialName("password_hash")
     val passwordHash: String? = null,
-    @SerialName("phone_number")
-    val phoneNumber: String? = null,
     val role: String,
     @SerialName("is_deleted")
     val isDeleted: Boolean = false,
@@ -28,7 +26,6 @@ data class UserModel(
         "full_name" to fullName,
         "email" to email,
         "password_hash" to passwordHash,
-        "phone_number" to phoneNumber,
         "role" to role,
         "is_deleted" to isDeleted,
         "is_synchronized" to isSynchronized,
@@ -60,7 +57,6 @@ data class UserModel(
                 fullName = (map["full_name"] ?: map["fullName"])?.toString().orEmpty(),
                 email = map["email"]?.toString().orEmpty(),
                 passwordHash = (map["password_hash"] ?: map["passwordHash"])?.toString(),
-                phoneNumber = (map["phone_number"] ?: map["phoneNumber"])?.toString(),
                 role = map["role"]?.toString().orEmpty(),
                 isDeleted = isDeleted,
                 isSynchronized = isSynchronized,
