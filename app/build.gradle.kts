@@ -37,6 +37,15 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("android/app/release-key.p12")
+            storePassword = "zenki.enrollmate"
+            keyPassword = "zenki.enrollmate"
+            keyAlias = "release"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
